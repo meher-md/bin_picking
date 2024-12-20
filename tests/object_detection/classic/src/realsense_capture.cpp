@@ -1,3 +1,33 @@
+/*
+ * File: capture_pointcloud.cpp
+ * Description: 
+ * This program captures depth and color frames using an Intel RealSense camera,
+ * processes the frames to align depth data with color data, and generates a 
+ * point cloud. The resulting point cloud is saved in PLY format, suitable for 
+ * 3D visualization and analysis. Key features include:
+ * 
+ * - Captures high-resolution depth and color frames (1280x720, 30 FPS).
+ * - Aligns depth data to color stream for accurate point cloud generation.
+ * - Applies filters to improve depth data quality:
+ *   - Decimation filter to reduce resolution.
+ *   - Spatial filter to smooth depth values.
+ *   - Temporal filter to minimize temporal noise.
+ * - Maps color data to the point cloud for better visualization.
+ * - Exports the processed point cloud to a PLY file.
+ * 
+ * Usage:
+ *   ./capture_pointcloud <output_ply_file>
+ * 
+ * Dependencies:
+ *   - Intel RealSense SDK (librealsense2)
+ *   - Standard C++ libraries
+ * 
+ * Note:
+ *   Ensure a compatible Intel RealSense device is connected before running 
+ *   this program. The output PLY file can be viewed in any 3D viewer supporting 
+ *   the PLY format.
+ */
+// Issue #001: Sparse point clouds.   
 #include <librealsense2/rs.hpp>
 #include <iostream>
 #include <fstream>
