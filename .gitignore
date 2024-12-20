@@ -1,0 +1,6 @@
+rendered_color_images/
+rendered_color_images_other/
+rendered_images/
+rendered_images_other/
+*.h5
+*.keras
