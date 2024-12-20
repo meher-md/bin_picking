@@ -5,3 +5,7 @@ pip install -r requirements.txt
 conda install tensorflow, keras
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 conda install conda-forge::opencv
+
+sudo apt update
+sudo apt install libpcl-dev
+

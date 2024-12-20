@@ -64,3 +64,7 @@ sudo apt autoremove libopencv3
 wget https://github.com/mt08xx/files/raw/master/opencv-rpi/libopencv3_3.4.3-20180907.1_armhf.deb
 sudo apt install -y ./libopencv3_3.4.3-20180907.1_armhf.deb
 sudo ldconfig
+
+
+### compilation instruction
+ g++ -std=c++11 capture_pointcloud.cpp -lrealsense2 -o capture_pointcloud2
