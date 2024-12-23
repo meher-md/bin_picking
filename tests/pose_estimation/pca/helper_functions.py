@@ -123,3 +123,39 @@ class SimpleIntrinsics:
         y = (py - self.ppy) * depth / self.fy
         z = depth
         return [x, y, z]
+
+
+import numpy as np
+import open3d as o3d
+import math
+
+def load_reference_point_cloud(file_path):
+    """
+    Load a reference point cloud from a file (e.g., CAD model).
+    """
+    reference_pcd = o3d.io.read_point_cloud(file_path)
+    if reference_pcd.is_empty():
+        raise ValueError("Reference point cloud is empty or invalid.")
+    return reference_pcd
+
+def register_point_cloud_to_reference(visible_pcd, reference_pcd, threshold=0.02):
+    """
+    Align the visible point cloud to the reference using ICP.
+    """
+    icp_result = o3d.pipelines.registration.registration_icp(
+        source=visible_pcd,
+        target=reference_pcd,
+        max_correspondence_distance=threshold,
+        init=np.eye(4),
+        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
+    )
+    return icp_result.transformation, icp_result.fitness
+
+def rotation_matrix_to_euler_angles(R):
+    """
+    Convert a 3x3 rotation matrix to roll, pitch, yaw (Tait-Bryan angles).
+    """
+    roll = math.atan2(R[2, 1], R[2, 2])
+    pitch = -math.asin(R[2, 0])
+    yaw = math.atan2(R[1, 0], R[0, 0])
+    return math.degrees(roll), math.degrees(pitch), math.degrees(yaw)
