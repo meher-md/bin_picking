@@ -1,0 +1,23 @@
+sudo snap install cmake --classic
+sudo apt install libc++-dev libc++abi-dev clang
+
+# Clone Open3D
+git clone --recursive https://github.com/isl-org/Open3D.git
+cd Open3D
+
+# Build Open3D
+mkdir build && cd build
+cmake -DBUILD_CPP_EXAMPLES=ON ..
+make -j$(nproc)
+sudo make install
+
+# Build files
+mkdir build
+cd build
+cmake ..
+make
+
+#Run program
+./point_cloud_registration
+
+

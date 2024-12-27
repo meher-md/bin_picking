@@ -1,6 +1,7 @@
 import open3d as o3d
 import numpy as np
 from helper_functions import register_point_cloud_to_reference
+#o3d.visualization.webrtc_server.enable_webrtc()
 
 # Create two synthetic point clouds
 def create_test_point_clouds():

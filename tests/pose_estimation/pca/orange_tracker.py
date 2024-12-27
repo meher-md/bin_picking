@@ -25,9 +25,10 @@ def main():
 
     # For color threshold (roughly for "orange")
     # Adjust as needed for your lighting conditions
-    orange_lower = (5, 100, 100)   # HSV
-    orange_upper = (15, 255, 255)
-
+    # orange_lower = (5, 100, 100)   # HSV
+    # orange_upper = (15, 255, 255)
+    orange_lower = (0, 100, 100)
+    orange_upper = (10, 255, 255)
     try:
         while True:
             frames = pipeline.wait_for_frames()

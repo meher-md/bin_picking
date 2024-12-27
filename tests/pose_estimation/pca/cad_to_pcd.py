@@ -17,11 +17,21 @@ from OCC.Core.BRepClass3d import BRepClass3d_SolidClassifier
 import open3d as o3d
 
 def load_step_file(filepath):
-    """Load a STEP file and return its TopoDS_Shape."""
+    """Load a STEP or STP file and return its TopoDS_Shape."""
+    import os
+    from OCC.Core.STEPControl import STEPControl_Reader
+
+    # Ensure the file extension is valid
+    valid_extensions = ('.step', '.stp')
+    if not filepath.lower().endswith(valid_extensions):
+        raise ValueError(f"Unsupported file extension for: {filepath}. Expected one of {valid_extensions}")
+
+    # Read the STEP/STP file
     reader = STEPControl_Reader()
     status = reader.ReadFile(filepath)
     if status != 1:
-        raise ValueError(f"Error reading STEP file: {filepath}")
+        raise ValueError(f"Error reading STEP/STP file: {filepath}")
+    
     reader.TransferRoot()
     shape = reader.OneShape()
     return shape
@@ -172,6 +182,6 @@ def step_to_point_cloud(step_file, output_file):
 
 # Example usage
 if __name__ == "__main__":
-    step_file = "/home/dhanuzch/Documents/bin_picking/data/VN_1400.step"  # Replace with your STEP file path
-    output_file = "data/output.xyz"  # Output point cloud file
+    step_file = "/home/dhanuzch/Documents/bin_picking/data/Red_bottle_cap.stp"  # Replace with your STEP file path
+    output_file = "data/bottle.xyz"  # Output point cloud file
     step_to_point_cloud(step_file, output_file)

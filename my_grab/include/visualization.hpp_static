@@ -1,0 +1,13 @@
+#ifndef VISUALIZATION_HPP
+#define VISUALIZATION_HPP
+
+#include <open3d/Open3D.h>
+#include <memory>
+
+namespace visualize {
+void show_point_cloud(
+    const std::shared_ptr<open3d::geometry::PointCloud>& captured_pcd,
+    const std::shared_ptr<open3d::geometry::PointCloud>& aligned_pcd);
+}
+
+#endif

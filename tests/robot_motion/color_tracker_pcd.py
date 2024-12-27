@@ -3,6 +3,8 @@
 import cv2
 import numpy as np
 import pyrealsense2 as rs
+from pcd_plotter import setup_matplotlib_visualizer, update_partial_cloud
+import open3d as o3d
 
 from helper_functions import (
     create_point_cloud_from_bbox,
@@ -15,10 +17,14 @@ from helper_functions import (
     SimpleIntrinsics
 )
 
+DEBUG_PCD_CAPTURE = True
 def main():
+    if DEBUG_PCD_CAPTURE:
+        fig,ax = setup_matplotlib_visualizer()
+
     # Load the reference point cloud
     reference_pcd = load_reference_point_cloud("data/output.xyz")
-
+    
     pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
@@ -46,45 +52,45 @@ def main():
             depth_image = np.asanyarray(depth_frame.get_data())
             color_image = np.asanyarray(color_frame.get_data())
 
-            # Convert to HSV
+            # Convert to HSV and create a mask for the target color
             hsv_img = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv_img, orange_lower, orange_upper)
 
-            # Optionally, do morphological ops to clean the mask
+            # Optionally, clean the mask using morphological operations
             kernel = np.ones((5, 5), np.uint8)
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-            # Find contours
+            # Find contours in the mask
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
-                # Largest contour
+                # Get the largest contour
                 c = max(contours, key=cv2.contourArea)
                 x, y, w, h = cv2.boundingRect(c)
 
                 if w > 10 and h > 10:
-                    # If bounding box is big enough, we consider it
-                    # Draw bounding box on color image
-                    cv2.rectangle(color_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                    # Draw bounding box on the color image
+                    cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-                    # We'll build pcd from that bounding box
-                    # Extract intrinsics from depth stream
+                    # Extract intrinsics from the depth stream
                     intrinsics_data = depth_frame.profile.as_video_stream_profile().get_intrinsics()
-                    fx = intrinsics_data.fx
-                    fy = intrinsics_data.fy
-                    ppx = intrinsics_data.ppx
-                    ppy = intrinsics_data.ppy
-                    my_intrinsics = SimpleIntrinsics(fx, fy, ppx, ppy)
 
+                    # Pass the correct RealSense intrinsics directly
                     pcd = create_point_cloud_from_bbox(
                         color_image, depth_image, (x, y, w, h),
-                        intrinsics=my_intrinsics
+                        intrinsics=intrinsics_data  # Use RealSense intrinsics directly
                     )
 
                     # Refine
-                    pcd_refined = refine_point_cloud(pcd, voxel_size=0.01,
-                                                     nb_neighbors=20, std_ratio=2.0)
-                    pcd_clustered = keep_largest_cluster(pcd_refined, eps=0.02, min_points=20)
+                    # pcd_refined = refine_point_cloud(pcd, voxel_size=0.01,
+                    #                                  nb_neighbors=20, std_ratio=2.0)
+                    pcd_clustered = keep_largest_cluster(pcd, eps=0.02, min_points=20)
 
+                    if pcd_clustered:
+                        if DEBUG_PCD_CAPTURE:
+                            #update_partial_cloud(ax, test_pcd)
+                            update_partial_cloud(ax,pcd_clustered)
+                    else:
+                        print("No PCD Data")
                     # Align to reference point cloud
                     transformation, fitness = register_point_cloud_to_reference(pcd_clustered, reference_pcd)
 
@@ -116,6 +122,7 @@ def main():
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()

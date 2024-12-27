@@ -3,7 +3,77 @@ rendered_color_images/
 rendered_color_images_other/
 rendered_images/
 rendered_images_other/
+librealsense/
+third-party/
+gpd/
 *.h5
 *.keras
 *.pyc
 *.png
+
+# Build artifacts and intermediate files
+build/
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.lib
+*.a
+*.exe
+
+# CMake build files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Generated binaries
+bin/
+*.out
+
+# Logs and debugging files
+*.log
+*.trace
+*.stackdump
+core
+
+# IDE and editor files
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+.idea/
+*.iml
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.old
+*.orig
+*.rej
+*.gch
+
+# Tests and coverage
+*.gcno
+*.gcda
+*.gcov
+
+# Dependencies
+/deps/
+vendor/
+third_party/
+
+# Auto-generated files
+*.generated.*
+*.moc
+
+# Miscellaneous
+tags
+*.pyc
+*.class

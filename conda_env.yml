@@ -1,0 +1,12 @@
+name: open3d2_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - open3d
+  - opencv
+  - pip
+  - numpy
+  - tqdm
+  # Add other packages as needed

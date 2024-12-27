@@ -1,0 +1,17 @@
+#include "visualization.hpp"
+
+namespace visualize {
+
+void show_point_cloud(
+    const std::shared_ptr<open3d::geometry::PointCloud>& captured_pcd,
+    const std::shared_ptr<open3d::geometry::PointCloud>& aligned_pcd) {
+
+    // Apply distinct colors for visualization
+    captured_pcd->PaintUniformColor({0.0, 0.0, 0.0}); // Black for the captured PCD
+    aligned_pcd->PaintUniformColor({1.0, 0.0, 0.0});  // Red for the aligned CAD PCD
+
+    // Use Open3D visualization
+    open3d::visualization::DrawGeometries({captured_pcd, aligned_pcd});
+}
+
+}

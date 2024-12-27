@@ -1,0 +1,69 @@
+#include "pcd_capture.hpp"
+#include "object_detection.hpp"
+#include "cad_pcd.hpp"
+#include "visualization.hpp"
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+
+// Function to load CAD file path from configuration
+std::string get_cad_path_from_config(const std::string& config_file) {
+    std::ifstream file(config_file);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open configuration file: " + config_file);
+    }
+
+    nlohmann::json config;
+    file >> config;
+    return config["cad_file_path"].get<std::string>();
+}
+
+int main() {
+    try {
+        rs2::pipeline pipe;
+        pipe.start();
+
+        // Load CAD PCD from configuration
+        std::string config_file = "../config/paths.json";
+        std::string cad_file_path = get_cad_path_from_config(config_file);
+        auto cad_pcd = cad::get_cad_pcd(cad_file_path);
+
+        while (true) {
+            // Capture the full PCD
+            auto captured_pcd = capture::capture_pcd(pipe);
+
+            // Make a copy of the captured PCD for visualization
+            auto original_pcd = std::make_shared<open3d::geometry::PointCloud>(*captured_pcd);
+
+            // Perform object detection and get alignment transformation
+            auto detection_result = detect::detect_object(captured_pcd, cad_pcd);
+
+            // Apply the transformation to the CAD PCD
+            auto transformed_cad_pcd = std::make_shared<open3d::geometry::PointCloud>(*detection_result.aligned_pcd);
+
+            // Color the original PCD white
+            for (auto& color : original_pcd->colors_) {
+                color = Eigen::Vector3d(1.0, 1.0, 1.0); // White
+            }
+
+            // Color the aligned CAD PCD red
+            for (auto& color : transformed_cad_pcd->colors_) {
+                color = Eigen::Vector3d(1.0, 0.0, 0.0); // Red
+            }
+
+            // Combine the two point clouds for visualization
+            auto combined_pcd = std::make_shared<open3d::geometry::PointCloud>();
+            *combined_pcd += *captured_pcd;
+            *combined_pcd += *transformed_cad_pcd;
+
+            // Visualize the combined PCD
+        visualize::show_combined_point_cloud(combined_pcd);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;    
+}

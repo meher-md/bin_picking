@@ -1,4 +1,9 @@
-#increase swap size
+## Flow
+* PCD module gives clear PCD
+* Object Detection Module gives Pose of the Object w.r.t Camera
+* Roboot Software should be able to take target pose w.r.t camera mounding position and move to the position.
+
+## increase swap size
 sudo vim /etc/dphys-swapfile
 CONF_SWAPSIZE=2048
 

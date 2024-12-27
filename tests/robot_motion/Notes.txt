@@ -1,0 +1,5 @@
+Which Method to Choose?
+Structured Data: Geometry-based techniques like PCA or OBB.
+Partial or Noisy Data: Feature-based registration or global alignment.
+High Accuracy Needs: Global alignment algorithms or hybrid methods.
+Large Datasets: Deep learning-based methods (if labeled data is available).
