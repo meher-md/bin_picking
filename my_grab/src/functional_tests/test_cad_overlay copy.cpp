@@ -216,59 +216,36 @@ TEST(OverlayCADOntoScene_OpenGL, RealSenseStreamWithCADOverlay) {
                           cv::Point(static_cast<int>(max_bound.x()), static_cast<int>(max_bound.y())),
                           cv::Scalar(0, 255, 0), 2);
 
-
-            // Get color frame dimensions and data pointer
-            int width = color_frame.get_width();
-            int height = color_frame.get_height();
-            int stride = color_frame.get_stride_in_bytes();
-            unsigned char* data = (unsigned char*)color_frame.get_data();
-            // Extract bounding box coordinates
-            int x_min = static_cast<int>(min_bound_2d.x());
-            int y_min = static_cast<int>(min_bound_2d.y());
-            int x_max = static_cast<int>(max_bound_2d.x());
-            int y_max = static_cast<int>(max_bound_2d.y());
-
-            // Ensure the coordinates are within the frame bounds
-            x_min = std::max(0, x_min);
-            y_min = std::max(0, y_min);
-            x_max = std::min(width - 1, x_max);
-            y_max = std::min(height - 1, y_max);
-
-            // Modify pixel values in the bounding box to blue
-            for (int y = y_min; y <= y_max; ++y) {
-                for (int x = x_min; x <= x_max; ++x) {
-                    int index = y * stride + x * 3; // Assuming 3 bytes per pixel (RGB)
-                    data[index] = 255; // Blue channel
-                    data[index + 1] = 0; // Green channel
-                    data[index + 2] = 0; // Red channel
-                }
-            }
-
             // Generate point cloud from depth frame
             rs2::pointcloud pc;
             rs2::points points;
             pc.map_to(color_frame);
             points = pc.calculate(depth_frame);
 
+            if (!points || points.size() == 0) {
+                std::cerr << "Generated point cloud is empty!" << std::endl;
+                continue;
+            }
+
             // Convert 2D bounding box to 3D bounding box
             Eigen::Vector3f min_bound_3d, max_bound_3d;
             std::tie(min_bound_3d, max_bound_3d) = calculate3DBoundingBox(min_bound_2d, max_bound_2d, depth_frame, intrinsics);
 
-            // // Extract ROI and align CAD
-            // auto roi_scene = highlightROI(points, min_bound_3d, max_bound_3d);
-            // visualizePointCloud(roi_scene, 0.0, 0.0, 1.0); // Blue for ROI
+            // Highlight ROI in the point cloud
+            auto highlighted_scene = highlightROI(points, min_bound_3d, max_bound_3d);
 
-            // auto aligned_cad = alignCADToScene(cad_object, roi_scene);
-            // visualizePointCloud(aligned_cad, 1.0, 0.0, 0.0); // Red for CAD overlay
-
-            // Render point clouds
-            app_state.tex.upload(color_frame);
+            // Visualize the full scene with highlighted ROI
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            unsigned char target_blue = 255; // Blue channel
-            unsigned char target_green = 0;  // Green channel
-            unsigned char target_red = 0;    // Red channel
+            visualizePointCloud(highlighted_scene);
 
-            draw_colored_pointcloud(800, 600, app_state, points, color_frame, target_blue, target_green, target_red);
+            // Print 2D bounding box values
+            std::cout << "2D Bounding Box: Min(" << min_bound_2d.x() << ", " << min_bound_2d.y() << "), "
+                    << "Max(" << max_bound_2d.x() << ", " << max_bound_2d.y() << ")" << std::endl;
+
+            // Print 3D bounding box values
+            std::cout << "3D Bounding Box: Min(" << min_bound_3d.x() << ", " << min_bound_3d.y() << ", " << min_bound_3d.z() << "), "
+                    << "Max(" << max_bound_3d.x() << ", " << max_bound_3d.y() << ", " << max_bound_3d.z() << ")" << std::endl;
+
 
             glfwSwapBuffers(window);
             glfwPollEvents();

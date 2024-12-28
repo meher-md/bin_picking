@@ -938,6 +938,87 @@ struct glfw_state {
     texture tex;
 };
 
+
+inline void draw_colored_pointcloud(float width, float height, glfw_state& app_state, rs2::points& points, const rs2::video_frame& color_frame, 
+                                    unsigned char target_blue, unsigned char target_green, unsigned char target_red)
+{
+    if (!points)
+        return;
+
+    // OpenGL commands that prep screen for the point cloud
+    glLoadIdentity();
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    glClearColor(153.f / 255, 153.f / 255, 153.f / 255, 1);
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    gluPerspective(60, width / height, 0.01f, 10.0f);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    gluLookAt(0, 0, 0, 0, 0, 1, 0, -1, 0);
+
+    glTranslatef(0, 0, +0.5f + app_state.offset_y * 0.05f);
+    glRotated(app_state.pitch, 1, 0, 0);
+    glRotated(app_state.yaw, 0, 1, 0);
+    glTranslatef(0, 0, -0.5f);
+
+    glPointSize(width / 640);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, app_state.tex.get_gl_handle());
+    float tex_border_color[] = { 0.8f, 0.8f, 0.8f, 0.8f };
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, tex_border_color);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F); // GL_CLAMP_TO_EDGE
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F); // GL_CLAMP_TO_EDGE
+
+    glBegin(GL_POINTS);
+
+    // Render only the points with the specified color
+    auto vertices = points.get_vertices();              // Get vertices
+    auto tex_coords = points.get_texture_coordinates(); // Get texture coordinates
+    const unsigned char* color_data = static_cast<const unsigned char*>(color_frame.get_data());
+    int stride = color_frame.get_stride_in_bytes();
+
+    for (int i = 0; i < points.size(); i++)
+    {
+        if (vertices[i].z) // Only consider valid depth points
+        {
+            // Map texture coordinates to image coordinates
+            int x = static_cast<int>(tex_coords[i].u * color_frame.get_width());
+            int y = static_cast<int>(tex_coords[i].v * color_frame.get_height());
+
+            if (x >= 0 && y >= 0 && x < color_frame.get_width() && y < color_frame.get_height())
+            {
+                // Get the color at the mapped texture coordinates
+                int index = y * stride + x * 3; // 3 channels (BGR)
+                unsigned char blue = color_data[index];
+                unsigned char green = color_data[index + 1];
+                unsigned char red = color_data[index + 2];
+
+                // Check if the color matches the target color
+                if (blue == target_blue && green == target_green && red == target_red)
+                {
+                    glVertex3fv(vertices[i]);  // Render the point
+                    glTexCoord2f(tex_coords[i].u, tex_coords[i].v); // Upload texture coordinate
+                }
+            }
+        }
+    }
+
+    glEnd();
+
+    // OpenGL cleanup
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glPopAttrib();
+}
+
+
+
 // Handles all the OpenGL calls needed to display the point cloud
 inline void draw_pointcloud(float width, float height, glfw_state& app_state, rs2::points& points)
 {
