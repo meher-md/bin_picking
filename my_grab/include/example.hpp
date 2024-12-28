@@ -130,7 +130,7 @@ inline void draw_text(int x, int y, const char* text)
     glDisableClientState(GL_VERTEX_ARRAY);
 }
 
-void set_viewport(const rect& r)
+inline void set_viewport(const rect& r)
 {
     glViewport((int)r.x, (int)r.y, (int)r.w, (int)r.h);
     glLoadIdentity();
@@ -939,7 +939,7 @@ struct glfw_state {
 };
 
 // Handles all the OpenGL calls needed to display the point cloud
-void draw_pointcloud(float width, float height, glfw_state& app_state, rs2::points& points)
+inline void draw_pointcloud(float width, float height, glfw_state& app_state, rs2::points& points)
 {
     if (!points)
         return;
@@ -996,7 +996,7 @@ void draw_pointcloud(float width, float height, glfw_state& app_state, rs2::poin
     glPopAttrib();
 }
 
-void quat2mat(rs2_quaternion& q, GLfloat H[16])  // to column-major matrix
+inline void quat2mat(rs2_quaternion& q, GLfloat H[16])  // to column-major matrix
 {
     H[0] = 1 - 2 * q.y * q.y - 2 * q.z * q.z; H[4] = 2 * q.x * q.y - 2 * q.z * q.w;     H[8] = 2 * q.x * q.z + 2 * q.y * q.w;     H[12] = 0.0f;
     H[1] = 2 * q.x * q.y + 2 * q.z * q.w;     H[5] = 1 - 2 * q.x * q.x - 2 * q.z * q.z; H[9] = 2 * q.y * q.z - 2 * q.x * q.w;     H[13] = 0.0f;
@@ -1005,7 +1005,7 @@ void quat2mat(rs2_quaternion& q, GLfloat H[16])  // to column-major matrix
 }
 
 // Handles all the OpenGL calls needed to display the point cloud w.r.t. static reference frame
-void draw_pointcloud_wrt_world(float width, float height, glfw_state& app_state, rs2::points& points, rs2_pose& pose, float H_t265_d400[16], std::vector<rs2_vector>& trajectory)
+inline void draw_pointcloud_wrt_world(float width, float height, glfw_state& app_state, rs2::points& points, rs2_pose& pose, float H_t265_d400[16], std::vector<rs2_vector>& trajectory)
 {
     if (!points)
         return;
@@ -1090,7 +1090,7 @@ void draw_pointcloud_wrt_world(float width, float height, glfw_state& app_state,
 }
 
 // Registers the state variable and callbacks to allow mouse control of the pointcloud
-void register_glfw_callbacks(window& app, glfw_state& app_state)
+inline void register_glfw_callbacks(window& app, glfw_state& app_state)
 {
     app.on_left_mouse = [&](bool pressed)
     {
@@ -1127,7 +1127,7 @@ void register_glfw_callbacks(window& app, glfw_state& app_state)
     };
 }
 
-void get_screen_resolution(unsigned int& window_width, unsigned int& window_height) {
+inline void get_screen_resolution(unsigned int& window_width, unsigned int& window_height) {
     glfwInit();
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 

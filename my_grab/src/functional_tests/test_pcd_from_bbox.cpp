@@ -5,7 +5,7 @@
 #include "pcd_frm_depth.hpp"
 #include "detect_color_bbox.hpp"
 
-TEST(RealTimeBoundingBoxAndPointCloud, RealSenseStream) {
+TEST(RealTimeBoundingBoxAndPointCloud_Basic, RealSenseStream) {
     // Initialize RealSense pipeline
     rs2::pipeline pipe;
     auto profile = pipe.start();

@@ -13,7 +13,7 @@
 //////////////////////////////
 
 // Find devices with specified streams
-bool device_with_streams(std::vector <rs2_stream> stream_requests, std::string& out_serial)
+inline bool device_with_streams(std::vector <rs2_stream> stream_requests, std::string& out_serial)
 {
     rs2::context ctx;
     auto devs = ctx.query_devices();
