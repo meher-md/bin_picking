@@ -352,17 +352,6 @@ TEST(SegmentaionOfPCD_OpenGL, RealSenseStreamWithCADOverlay) {
             pc.map_to(color_frame);
             points = pc.calculate(depth_frame);
 
-            // // Convert 2D bounding box to 3D bounding box
-            // Eigen::Vector3f min_bound_3d, max_bound_3d;
-            // std::tie(min_bound_3d, max_bound_3d) = calculate3DBoundingBox(min_bound_2d, max_bound_2d, depth_frame, intrinsics);
-
-            // // Extract ROI and align CAD
-            // auto roi_scene = highlightROI(points, min_bound_3d, max_bound_3d);
-            // visualizePointCloud(roi_scene, 0.0, 0.0, 1.0); // Blue for ROI
-
-            // auto aligned_cad = alignCADToScene(cad_object, roi_scene);
-            // visualizePointCloud(aligned_cad, 1.0, 0.0, 0.0); // Red for CAD overlay
-
             // Render point clouds
             app_state.tex.upload(color_frame);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

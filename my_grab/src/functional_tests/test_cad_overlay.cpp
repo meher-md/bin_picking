@@ -22,18 +22,18 @@
 #include <stdexcept>
 
 // Declare a global pointer for the merged point cloud
-std::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> global_merged_pcd;
+// std::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> global_merged_pcd;
 
-// Signal handler function
-void signalHandler(int signum) {
-    if (global_merged_pcd && !global_merged_pcd->points.empty()) {
-        std::cout << "Saving merged point cloud before exiting..." << std::endl;
-        pcl::io::savePCDFileASCII("../assets/merged_pcd.pcd", *global_merged_pcd);
-        std::cout << "Merged point cloud saved to ../assets/merged_pcd.pcd" << std::endl;
-    }
-    std::cout << "Exiting gracefully..." << std::endl;
-    exit(signum); // Exit the program
-}
+// // Signal handler function
+// void signalHandler(int signum) {
+//     if (global_merged_pcd && !global_merged_pcd->points.empty()) {
+//         std::cout << "Saving merged point cloud before exiting..." << std::endl;
+//         pcl::io::savePCDFileASCII("../assets/merged_pcd.pcd", *global_merged_pcd);
+//         std::cout << "Merged point cloud saved to ../assets/merged_pcd.pcd" << std::endl;
+//     }
+//     std::cout << "Exiting gracefully..." << std::endl;
+//     exit(signum); // Exit the program
+// }
 
 // Function to initialize GLFW
 inline GLFWwindow* initializeGLFW() {
@@ -352,7 +352,7 @@ TEST(CADPCDTest, LoadAndSaveCADFile) {
 
 TEST(OverlayCADOntoScene_OpenGL, RealSenseStreamWithCADOverlay) {
     // In the TEST function
-    global_merged_pcd = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>(); 
+    // global_merged_pcd = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>(); 
     try {
         // Initialize RealSense pipeline
         rs2::pipeline pipe;
@@ -375,6 +375,11 @@ TEST(OverlayCADOntoScene_OpenGL, RealSenseStreamWithCADOverlay) {
 
         // Downsample CAD PCD for faster processing (optional but recommended)
         pcl::PointCloud<pcl::PointXYZ>::Ptr cad_downsampled = downsamplePointCloud(cad_object, 0.005f);
+
+        // Compute bounding box for scaling
+        pcl::PointXYZ min_cad, max_cad;
+        pcl::getMinMax3D(*cad_object, min_cad, max_cad);
+        float cad_size = std::max({ max_cad.x - min_cad.x, max_cad.y - min_cad.y, max_cad.z - min_cad.z });
 
         // Initialize GLFW
         GLFWwindow* window = initializeGLFW();
@@ -493,18 +498,47 @@ TEST(OverlayCADOntoScene_OpenGL, RealSenseStreamWithCADOverlay) {
             }
 
             // // Downsample and remove outliers from object PCD
-            pcl::PointCloud<pcl::PointXYZ>::Ptr object_pcd_filtered = downsamplePointCloud(object_pcd, 0.005f);
-            object_pcd_filtered = removeOutliers(object_pcd_filtered, 50, 1.0);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr object_pcd_filtered(new pcl::PointCloud<pcl::PointXYZ>());
+            pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+            sor.setInputCloud(object_pcd);
+            sor.setMeanK(50);
+            sor.setStddevMulThresh(1.0);
+            sor.filter(*object_pcd_filtered);
+            // pcl::PointCloud<pcl::PointXYZ>::Ptr object_pcd_filtered = downsamplePointCloud(object_pcd, 0.005f);
+            // object_pcd_filtered = removeOutliers(object_pcd, 20, 2.0);
             std::cout << "Downsample and remove outliers from object PCD..." << std::endl;
 
+            // Compute bounding box for the filtered object
+            pcl::PointXYZ min_obj, max_obj;
+            pcl::getMinMax3D(*object_pcd_filtered, min_obj, max_obj);
+            float object_size = std::max({ max_obj.x - min_obj.x, max_obj.y - min_obj.y, max_obj.z - min_obj.z });
+            std::cout << "Bounding Box Min: (" << min_obj.x << ", " << min_obj.y << ", " << min_obj.z << "), "
+                    << "Max: (" << max_obj.x << ", " << max_obj.y << ", " << max_obj.z << ")" << std::endl;
+            std::cout << "Computed Object Size: " << object_size << std::endl;
+            std::cout << "Computed CAD Size: " << cad_size << std::endl;
+            // Scale the CAD point cloud to match the object point cloud size
+            float scale_factor = object_size / cad_size;
+            Eigen::Affine3f scale = Eigen::Affine3f::Identity();
+            scale.scale(scale_factor);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr scaled_ref_cad(new pcl::PointCloud<pcl::PointXYZ>());
+            pcl::transformPointCloud(*cad_downsampled, *scaled_ref_cad, scale);
+
             // merge and save
-            *global_merged_pcd = *object_pcd_filtered + *cad_downsampled;
+            // *global_merged_pcd = *scaled_ref_cad + *object_pcd_filtered;
+            std::cout << "Saving merged point cloud before exiting..." << std::endl;
+            // pcl::io::savePCDFileASCII("../assets/merged_pcd.pcd", *global_merged_pcd);
+            // pcl::io::savePCDFileASCII("../assets/object_pcd.pcd", *object_pcd);
+            // pcl::io::savePCDFileASCII("../assets/object_pcd_filtered.pcd", *object_pcd_filtered);
+            // pcl::io::savePCDFileASCII("../assets/scaled_ref.pcd", *scaled_ref_cad);
+
+
+            // std::cout << "Merged point cloud saved to ../assets/merged_pcd.pcd" << std::endl;
             // Perform alignment between CAD PCD and isolated object PCD
             std::cout << "Perform alignment between CAD PCD and isolated object PCD..." << std::endl;
 
             Eigen::Matrix4f transformation;
             try {
-                transformation = alignPointClouds(cad_downsampled, object_pcd_filtered);
+                transformation = alignPointClouds(scaled_ref_cad, object_pcd_filtered);
             } catch (const std::runtime_error& e) {
                 std::cerr << "Alignment error: " << e.what() << std::endl;
                 // Handle alignment failure (e.g., skip replacement)
@@ -517,7 +551,7 @@ TEST(OverlayCADOntoScene_OpenGL, RealSenseStreamWithCADOverlay) {
             std::cout << "Apply transformation to the original CAD PCD.." << std::endl;
 
             pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cad(new pcl::PointCloud<pcl::PointXYZ>());
-            pcl::transformPointCloud(*cad_object, *transformed_cad, transformation);
+            pcl::transformPointCloud(*scaled_ref_cad, *transformed_cad, transformation);
 
             // Convert transformed CAD to XYZRGB (assigning a default color, e.g., white)
             std::cout << "Convert transformed CAD to XYZRGB.." << std::endl;
@@ -534,34 +568,34 @@ TEST(OverlayCADOntoScene_OpenGL, RealSenseStreamWithCADOverlay) {
                 transformed_cad_rgb->points.push_back(point_rgb);
             }
 
-            // Remove original object points from the scene
-            std::cout << "Remove original object points from the scene.." << std::endl;
-            pcl::PointIndices::Ptr object_indices(new pcl::PointIndices());
-            for (size_t i = 0; i < object_pcd->points.size(); ++i) {
-                // Find corresponding index in scene_pcl
-                for (size_t j = 0; j < scene_pcl->points.size(); ++j) {
-                    if (std::abs(scene_pcl->points[j].x - object_pcd->points[i].x) < 1e-5 &&
-                        std::abs(scene_pcl->points[j].y - object_pcd->points[i].y) < 1e-5 &&
-                        std::abs(scene_pcl->points[j].z - object_pcd->points[i].z) < 1e-5) {
-                        object_indices->indices.push_back(j);
-                        break;
-                    }
-                }
-            }
+            // // Remove original object points from the scene
+            // std::cout << "Remove original object points from the scene.." << std::endl;
+            // pcl::PointIndices::Ptr object_indices(new pcl::PointIndices());
+            // for (size_t i = 0; i < object_pcd->points.size(); ++i) {
+            //     // Find corresponding index in scene_pcl
+            //     for (size_t j = 0; j < scene_pcl->points.size(); ++j) {
+            //         if (std::abs(scene_pcl->points[j].x - object_pcd->points[i].x) < 1e-5 &&
+            //             std::abs(scene_pcl->points[j].y - object_pcd->points[i].y) < 1e-5 &&
+            //             std::abs(scene_pcl->points[j].z - object_pcd->points[i].z) < 1e-5) {
+            //             object_indices->indices.push_back(j);
+            //             break;
+            //         }
+            //     }
+            // }
 
-            // Extract the scene without the original object points
-            std::cout << "extract the scene without the original object points.." << std::endl;
-            pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-            extract.setInputCloud(scene_pcl);
-            extract.setIndices(object_indices);
-            extract.setNegative(true);
-            pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene_without_object(new pcl::PointCloud<pcl::PointXYZRGB>());
-            extract.filter(*scene_without_object);
+            // // Extract the scene without the original object points
+            // std::cout << "extract the scene without the original object points.." << std::endl;
+            // pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+            // extract.setInputCloud(scene_pcl);
+            // extract.setIndices(object_indices);
+            // extract.setNegative(true);
+            // pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene_without_object(new pcl::PointCloud<pcl::PointXYZRGB>());
+            // extract.filter(*scene_without_object);
 
             // Combine the scene without the object with the transformed CAD PCD
             std::cout << "Combine the scene without the object.." << std::endl;
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr updated_scene(new pcl::PointCloud<pcl::PointXYZRGB>());
-            *updated_scene = *scene_without_object + *transformed_cad_rgb;
+            *updated_scene = *scene_pcl + *transformed_cad_rgb;
 
             // Visualize the updated scene using OpenGL
             std::cout << "Visualize the updated scene.." << std::endl;

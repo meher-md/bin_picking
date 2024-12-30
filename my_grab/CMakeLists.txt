@@ -50,11 +50,29 @@ target_link_libraries(realsense_app
     flann
 )
 
+# add_executable(unit_tests 
+#     src/unit_tests/test_pcd_frm_depth.cpp
+#     src/unit_tests/test_color_bbox.cpp
+#     src/unit_tests/test_main.cpp 
+#     src/unit_tests/test_pcd_capture.cpp 
+#     src/unit_tests/test_object_detection.cpp 
+#     src/unit_tests/test_cad_pcd.cpp 
+#     src/unit_tests/test_visualization.cpp 
+#     src/unit_tests/test_augmented_pcd.cpp
+#     src/pcd_capture.cpp 
+#     src/object_detection.cpp 
+#     src/cad_pcd.cpp 
+#     src/visualization.cpp
+#     src/pcd_frm_depth.cpp  # Include for test linking
+#     src/detect_color_bbox.cpp  # Include for test linking
+# )
+
+
 # Add executable for functional tests
 add_executable(functional_tests
-
+    src/functional_tests/test_pcd_seg_new.cpp
     src/functional_tests/test_pcd_from_bbox.cpp
-    src/functional_tests/test_pcd_from_bbox_opengl.cpp
+    src/functional_tests/test_display_pcd_opengl.cpp
     src/functional_tests/test_pcd_segmentation.cpp
     src/functional_tests/test_cad_overlay.cpp
     src/pcd_capture.cpp
@@ -64,6 +82,19 @@ add_executable(functional_tests
     src/pcd_frm_depth.cpp
     src/detect_color_bbox.cpp
 )
+
+
+# target_link_libraries(unit_tests 
+#     GTest::GTest
+#     GTest::Main
+#     Open3D::Open3D
+#     OpenGL::GL
+#     glfw
+#     GLU
+#     realsense2
+#     ${OpenCV_LIBS}                   # Link OpenCV libraries
+
+# )
 
 target_link_libraries(functional_tests
     GTest::GTest
