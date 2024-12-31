@@ -63,3 +63,4 @@ std::pair<Eigen::Matrix4d, double> register_point_cloud_to_reference(
     // Return the transformation and fitness
     return {result.transformation_, result.fitness_};
 }
+

@@ -11,6 +11,35 @@
 
 namespace fs = std::filesystem;
 
+// Function to covert point cloud from pcl to Open3D
+std::shared_ptr<open3d::geometry::PointCloud> pclToOpen3D(const pcl::PointCloud<pcl::PointXYZ>::Ptr& pcl_cloud) {
+    auto open3d_cloud = std::make_shared<open3d::geometry::PointCloud>();
+
+    // Iterate through PCL points and add them to Open3D point cloud
+    for (const auto& point : pcl_cloud->points) {
+        open3d_cloud->points_.emplace_back(point.x, point.y, point.z);
+    }
+
+    return open3d_cloud;
+}
+
+std::shared_ptr<open3d::geometry::PointCloud> get_cad_pcd(const std::string& file_path, int number_of_points) {
+    auto mesh = open3d::io::CreateMeshFromFile(file_path);
+
+    auto pcd = mesh->SamplePointsUniformly(number_of_points);
+    if (pcd->points_.empty()) {
+        throw std::runtime_error("Generated point cloud is empty.");
+    }
+
+    // Save the generated PCD to a file
+    std::string output_path = "../assets/generated_pcd.pcd";
+    if (!open3d::io::WritePointCloud(output_path, *pcd)) {
+        throw std::runtime_error("Failed to save PCD to file: " + output_path);
+    }
+
+    std::cout << "Saved PCD to: " << output_path << std::endl;
+    return pcd;
+}
 // Function to remove statistical outliers
 std::shared_ptr<open3d::geometry::PointCloud> RemoveStatisticalOutliers(
     const std::shared_ptr<open3d::geometry::PointCloud>& pcd,
@@ -63,7 +92,7 @@ std::shared_ptr<open3d::geometry::PointCloud> KeepLargestCluster(
 
 void ProcessAndVisualizePointClouds() {
     // Path to the data folder containing .pcd files
-    std::string data_folder = "../data";
+    std::string data_folder = "../assets";
 
     // Ensure the data folder exists
     if (!fs::exists(data_folder)) {
@@ -86,7 +115,10 @@ void ProcessAndVisualizePointClouds() {
 
     // Preprocess the object point cloud
     auto visible_pcd = RemoveStatisticalOutliers(raw_pcd);
-
+    
+    // Keep the largest cluster after outlier removal
+    visible_pcd = KeepLargestCluster(visible_pcd);
+    
     // Load the reference point cloud file
     std::string reference_pcd_path = data_folder + "/generated_pcd.pcd";
     if (!fs::exists(reference_pcd_path)) {
@@ -155,7 +187,26 @@ int main(int argc, char* argv[]) {
         // std::string save_pcd_path = "../data/object_pcd.pcd";
 
         // // CALL FOR PCD SAVING
-        // GenerateAndSaveObjectPCD(save_pcd_path);
+        // Generate CAD point cloud for reference
+        std::string cad_file_path = "../assets/VB_1400.obj"; // Path to the CAD file
+        std::shared_ptr<open3d::geometry::PointCloud> reference_pcd;
+
+        try {
+            // Generate the CAD point cloud directly as an Open3D point cloud
+            reference_pcd = get_cad_pcd(cad_file_path, 100000); // Provide appropriate file path and number of points
+        } catch (const std::exception& e) {
+            std::cerr << e.what() << "\n";
+            return EXIT_FAILURE;
+        }
+
+        // Save the generated CAD PCD to a file
+        std::string output_pcd_path = "../assets/generated_pcd.pcd";
+        if (!open3d::io::WritePointCloud(output_pcd_path, *reference_pcd)) {
+            std::cerr << "Error: Failed to save the generated point cloud to '" << output_pcd_path << "'.\n";
+            return EXIT_FAILURE;
+        }
+        std::cout << "Saved the generated CAD point cloud to: " << output_pcd_path << "\n";
+
 
         // Specify the path where the PCD file will be saved
         std::string pcd_file_path = "../assets/object_pcd.pcd";
