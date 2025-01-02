@@ -6,6 +6,7 @@ rendered_images_other/
 librealsense/
 third-party/
 gpd/
+/onnxruntime
 *.h5
 *.keras
 *.pyc

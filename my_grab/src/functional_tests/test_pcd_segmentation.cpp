@@ -359,8 +359,8 @@ TEST(SegmentaionOfPCD_OpenGL, RealSenseStreamWithCADOverlay) {
             unsigned char target_green = 0;  // Green channel
             unsigned char target_red = 0;    // Red channel
 
-            isolated_pcd  = isolate_colored_pointcloud(800, 600, app_state, points, color_frame, target_blue, target_green, target_red);
-            // draw_colored_pointcloud(800, 600, app_state, points, color_frame, target_blue, target_green, target_red);
+            // isolated_pcd  = isolate_colored_pointcloud(800, 600, app_state, points, color_frame, target_blue, target_green, target_red);
+            draw_colored_pointcloud(800, 600, app_state, points, color_frame, target_blue, target_green, target_red);
 
             glfwSwapBuffers(window);
             glfwPollEvents();   
@@ -369,11 +369,11 @@ TEST(SegmentaionOfPCD_OpenGL, RealSenseStreamWithCADOverlay) {
                 break;
             }
         }
-        if (isolated_pcd && !isolated_pcd->points.empty()) {
-            pcl::io::savePCDFileASCII("../assets/isolated_pcd.pcd", *isolated_pcd);
-        } else {
-            std::cerr << "Isolated point cloud is empty. Nothing to save." << std::endl;
-        }
+        // if (isolated_pcd && !isolated_pcd->points.empty()) {
+        //     pcl::io::savePCDFileASCII("../assets/isolated_pcd.pcd", *isolated_pcd);
+        // } else {
+        //     std::cerr << "Isolated point cloud is empty. Nothing to save." << std::endl;
+        // }
         glfwDestroyWindow(window);
         glfwTerminate();
     } catch (const std::exception& e) {

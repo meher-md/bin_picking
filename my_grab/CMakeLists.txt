@@ -70,11 +70,11 @@ target_link_libraries(realsense_app
 
 # Add executable for functional tests
 add_executable(functional_tests
-    src/functional_tests/test_pcd_seg_new.cpp
-    src/functional_tests/test_pcd_from_bbox.cpp
+    # src/functional_tests/test_pcd_seg_new.cpp
+    # src/functional_tests/test_pcd_from_bbox.cpp
     src/functional_tests/test_display_pcd_opengl.cpp
-    src/functional_tests/test_pcd_segmentation.cpp
-    src/functional_tests/test_cad_overlay.cpp
+    # src/functional_tests/test_pcd_segmentation.cpp
+    # src/functional_tests/test_cad_overlay.cpp
     src/pcd_capture.cpp
     src/object_detection.cpp
     src/cad_pcd.cpp

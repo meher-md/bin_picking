@@ -23,6 +23,28 @@ std::shared_ptr<open3d::geometry::PointCloud> pclToOpen3D(const pcl::PointCloud<
     return open3d_cloud;
 }
 
+// Function to downsample a point cloud using VoxelGrid filter
+
+std::shared_ptr<open3d::geometry::PointCloud> DownsamplePointCloud(
+    const std::shared_ptr<open3d::geometry::PointCloud> &pcd, 
+    double voxel_size) 
+{
+    if (!pcd) {
+        std::cerr << "Error: Invalid point cloud for downsampling.\n";
+        return nullptr;
+    }
+
+    std::cout << "Downsampling point cloud with voxel size: " << voxel_size << "...\n";
+    auto downsampled_pcd = pcd->VoxelDownSample(voxel_size);
+    if (downsampled_pcd->IsEmpty()) {
+        std::cerr << "Error: Downsampled point cloud is empty.\n";
+        return nullptr;
+    }
+
+    std::cout << "Downsampled point cloud has " << downsampled_pcd->points_.size() << " points.\n";
+    return downsampled_pcd;
+}
+
 std::shared_ptr<open3d::geometry::PointCloud> get_cad_pcd(const std::string& file_path, int number_of_points) {
     auto mesh = open3d::io::CreateMeshFromFile(file_path);
 
@@ -31,9 +53,16 @@ std::shared_ptr<open3d::geometry::PointCloud> get_cad_pcd(const std::string& fil
         throw std::runtime_error("Generated point cloud is empty.");
     }
 
+    // Apply voxel downsampling
+    
+    auto downsampled_pcd = pcd->VoxelDownSample(0.001);
+    if (downsampled_pcd->points_.empty()) {
+        throw std::runtime_error("Downsampled point cloud is empty.");
+    }
+
     // Save the generated PCD to a file
     std::string output_path = "../assets/generated_pcd.pcd";
-    if (!open3d::io::WritePointCloud(output_path, *pcd)) {
+    if (!open3d::io::WritePointCloud(output_path, *downsampled_pcd)) {
         throw std::runtime_error("Failed to save PCD to file: " + output_path);
     }
 
@@ -113,12 +142,24 @@ void ProcessAndVisualizePointClouds() {
         return;
     }
 
-    // Preprocess the object point cloud
-    auto visible_pcd = RemoveStatisticalOutliers(raw_pcd);
-    
+    // Downsample the point cloud
+    double voxel_size = 0.001; // Adjust voxel size as needed
+    auto downsampled_pcd = DownsamplePointCloud(raw_pcd, voxel_size);
+    if (!downsampled_pcd) {
+        std::cerr << "Error: Failed to down sample the pcd '" << visible_pcd_path << "'.\n";
+        return;
+    }
+
     // Keep the largest cluster after outlier removal
-    visible_pcd = KeepLargestCluster(visible_pcd);
+    auto visible_pcd = KeepLargestCluster(downsampled_pcd);
+
+    // Preprocess the object point cloud
+    visible_pcd = RemoveStatisticalOutliers(visible_pcd);
     
+
+    
+
+
     // Load the reference point cloud file
     std::string reference_pcd_path = data_folder + "/generated_pcd.pcd";
     if (!fs::exists(reference_pcd_path)) {
@@ -183,8 +224,6 @@ void ProcessAndVisualizePointClouds() {
 
 int main(int argc, char* argv[]) {
     try {
-        // // Define the path where the segmented PCD will be saved
-        // std::string save_pcd_path = "../data/object_pcd.pcd";
 
         // // CALL FOR PCD SAVING
         // Generate CAD point cloud for reference

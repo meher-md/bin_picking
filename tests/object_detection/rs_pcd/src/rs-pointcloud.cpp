@@ -1,37 +1,16 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2015-2017 Intel Corporation. All Rights Reserved.
-#include <cad_pcd.hpp>
-#include "object_detection.hpp"
+
 #include <librealsense2/rs.hpp> // Include RealSense Cross Platform API
 #include "example.hpp"          // Include short list of convenience functions for rendering
-#include <algorithm>            // std::min, std::max
-#include <fstream>
-#include <iostream>
-#include <nlohmann/json.hpp>
 
+#include <algorithm>            // std::min, std::max
 
 // Helper functions
 void register_glfw_callbacks(window& app, glfw_state& app_state);
 
-std::string get_cad_path_from_config(const std::string& config_file) {
-    std::ifstream file(config_file);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open configuration file: " + config_file);
-    }
-
-    nlohmann::json config;
-    file >> config;
-    return config["cad_file_path"].get<std::string>();
-}
-
-
 int main(int argc, char * argv[]) try
 {
-    // Get CAD file path from config
-    std::string config_file = "../config/paths.json";
-    std::string cad_file_path = get_cad_path_from_config(config_file);
-    auto cad_pcd = cad::get_cad_pcd(cad_file_path);
-
     // Create a simple OpenGL window for rendering:
     window app(1280, 720, "RealSense Pointcloud Example");
     // Construct an object to manage view state
@@ -73,30 +52,6 @@ int main(int argc, char * argv[]) try
 
         // Draw the pointcloud
         draw_pointcloud(app.width(), app.height(), app_state, points);
-
-        // declare a o3d point cloud variable
-        auto o3_pcd = std::make_shared<open3d::geometry::PointCloud>();
-        // Get the vertices from the point cloud
-        const rs2::vertex* vertices = points.get_vertices();
-        // Loop through each vertex and populate Open3D's point cloud
-        for (size_t i = 0; i < points.size(); ++i) {
-            const auto& v = vertices[i];
-            // Check for valid depth data (z > 0)
-            if (v.z > 0) {
-                o3_pcd->points_.emplace_back(v.x, v.y, v.z);
-            }
-        }
-
-        // Check if the point cloud is empty and throw an error if so
-        if (o3_pcd->points_.empty()) {
-            throw std::runtime_error("Generated o3d point cloud is empty. Depth data may be invalid.");
-        }
-
-        auto detection_result = detect::detect_object(o3_pcd, cad_pcd);
-
-        // Print transformation matrix
-        std::cout << "Transformation Matrix:\n" << detection_result.transformation << std::endl;
-
     }
 
     return EXIT_SUCCESS;
