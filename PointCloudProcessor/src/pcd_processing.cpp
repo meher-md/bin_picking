@@ -12,27 +12,63 @@
 #include <vector>
 #include <tuple>
 #include <algorithm>
+#include <opencv2/opencv.hpp>   // for decoding base64 into cv::Mat, etc.
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+
+// OpenGL for display
+#include <pcl/point_cloud.h>
+#include <GLFW/glfw3.h>    // or your chosen GL headers
+#include <GL/glu.h>        // for gluPerspective, gluLookAt, etc.
+#include <cmath>
 
 // Namespace aliases
 using json = nlohmann::json;
 
-
 // Helper functions
 void register_glfw_callbacks(window& app, glfw_state& app_state);
 
-// // Function to initialize GLFW
-// GLFWwindow* initializeGLFW() {
-//     if (!glfwInit()) {
-//         throw std::runtime_error("Failed to initialize GLFW");
-//     }
-//     GLFWwindow* window = glfwCreateWindow(800, 600, "OpenGL Point Cloud Viewer with CAD Overlay", nullptr, nullptr);
-//     if (!window) {
-//         glfwTerminate();
-//         throw std::runtime_error("Failed to create GLFW window");
-//     }
-//     glfwMakeContextCurrent(window);
-//     return window;
-// }
+std::vector<uchar> base64_decode(const std::string &encoded) 
+{
+    static const std::string base64_chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789+/";
+
+    // Prepare an output buffer (we'll push_back into a std::vector<uchar>)
+    std::vector<uchar> decoded;
+    decoded.reserve(encoded.size() * 3 / 4); // Rough estimate
+
+    // Temporary variables to hold decoding state
+    int val = 0;
+    int valb = -8;
+
+    for (unsigned char c : encoded) {
+        if (c == '=') {
+            // '=' padding indicates end
+            break;
+        }
+
+        // Use the base64_chars index to find out where c is in that string
+        int pos = base64_chars.find(c);
+        if (pos == (int)std::string::npos) {
+            // Skip non-base64 chars or throw an error if you prefer
+            continue;
+        }
+
+        // Update val with new 6 bits
+        val = (val << 6) + pos;
+        valb += 6;
+
+        // If we have a byte or more, extract
+        if (valb >= 0) {
+            decoded.push_back(static_cast<uchar>((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+
+    return decoded;
+}
 
 // Base64 encoding function
 std::string base64_encode(const std::vector<uchar>& data) {
@@ -56,240 +92,419 @@ std::string base64_encode(const std::vector<uchar>& data) {
 }
 
 
-// Function to isolate the colored point cloud and return PCL PCD
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr isolate_colored_pointcloud(
-    float width, 
-    float height, 
-    rs2::points& points, 
-    const rs2::video_frame& color_frame, 
-    unsigned char target_blue, 
-    unsigned char target_green, 
-    unsigned char target_red
-) {
-    if (!points) {
-        std::cerr << "No points to process." << std::endl;
-        return nullptr;
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr createPointCloudFromDepth(
+    const cv::Mat& depth_image,
+    const cv::Mat& color_image,
+    const nlohmann::json& intrinsics_json,
+    float depth_scale
+)
+{
+    // Parse intrinsics from JSON
+    int width       = intrinsics_json["width"];
+    int height      = intrinsics_json["height"];
+    float ppx       = intrinsics_json["ppx"];
+    float ppy       = intrinsics_json["ppy"];
+    float fx        = intrinsics_json["fx"];
+    float fy        = intrinsics_json["fy"];
+    // Distortion model is intrinsics_json["model"], and
+    // intrinsics_json["coeffs"] is a vector<float>, if needed.
+    // For a simple example, we ignore distortion or assume minimal.
+
+    // Create a new PCL point cloud
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+    cloud->width    = static_cast<uint32_t>(width);
+    cloud->height   = static_cast<uint32_t>(height);
+    cloud->is_dense = false;
+    cloud->points.resize(width * height);
+
+    // Safety checks in case actual depth_image size differs from intrinsics
+    if (depth_image.cols != width || depth_image.rows != height) {
+        std::cerr << "[Client] Warning: depth_image size mismatch with intrinsics.\n";
+    }
+    if (color_image.cols != width || color_image.rows != height) {
+        std::cerr << "[Client] Warning: color_image size mismatch with intrinsics.\n";
     }
 
-    // Create a PCL point cloud to store the isolated points
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr isolated_pcd(new pcl::PointCloud<pcl::PointXYZRGB>());
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            // Index in the cloud array
+            int idx = y * width + x;
+            pcl::PointXYZRGB& pt = cloud->points[idx];
 
-
-    // Render and collect points with the specified color
-    auto vertices = points.get_vertices();              // Get vertices
-    auto tex_coords = points.get_texture_coordinates(); // Get texture coordinates
-    const unsigned char* color_data = static_cast<const unsigned char*>(color_frame.get_data());
-    int stride = color_frame.get_stride_in_bytes();
-
-    for (int i = 0; i < points.size(); i++) {
-        if (vertices[i].z) { // Only consider valid depth points
-            // Map texture coordinates to image coordinates
-            int x = static_cast<int>(tex_coords[i].u * color_frame.get_width());
-            int y = static_cast<int>(tex_coords[i].v * color_frame.get_height());
-
-            if (x >= 0 && y >= 0 && x < color_frame.get_width() && y < color_frame.get_height()) {
-                // Get the color at the mapped texture coordinates
-                int index = y * stride + x * 3; // 3 channels (BGR)
-                unsigned char blue = color_data[index];
-                unsigned char green = color_data[index + 1];
-                unsigned char red = color_data[index + 2];
-
-                // Check if the color matches the target color
-                if (blue == target_blue && green == target_green && red == target_red) {
-                    glVertex3fv(reinterpret_cast<const GLfloat*>(&vertices[i]));  // Render the point
-                    glTexCoord2f(tex_coords[i].u, tex_coords[i].v); // Upload texture coordinate
-
-                    // Add the point to the PCL point cloud
-                    pcl::PointXYZRGB pcl_point;
-                    pcl_point.x = vertices[i].x;
-                    pcl_point.y = vertices[i].y;
-                    pcl_point.z = vertices[i].z;
-                    pcl_point.r = red;
-                    pcl_point.g = green;
-                    pcl_point.b = blue;
-                    isolated_pcd->points.push_back(pcl_point);
-                }
+            // Retrieve raw depth
+            uint16_t depth_val = depth_image.at<uint16_t>(y, x);
+            if (depth_val == 0) {
+                // No depth, mark as invalid
+                pt.x = pt.y = pt.z = std::numeric_limits<float>::quiet_NaN();
+                pt.r = pt.g = pt.b = 0;
+                continue;
             }
+            float z = depth_val * depth_scale; // Convert to meters if needed
+
+            // Project pixel (x, y) into 3D (X, Y, Z) using intrinsics
+            pt.z = z;
+            pt.x = (static_cast<float>(x) - ppx) * z / fx;
+            pt.y = (static_cast<float>(y) - ppy) * z / fy;
+
+            // Get color from color_image (BGR order in OpenCV)
+            cv::Vec3b rgb = color_image.at<cv::Vec3b>(y, x);
+            pt.b = rgb[0];
+            pt.g = rgb[1];
+            pt.r = rgb[2];
         }
     }
 
-    // Set the point cloud properties
-    isolated_pcd->width = static_cast<uint32_t>(isolated_pcd->points.size());
-    isolated_pcd->height = 1;
-    isolated_pcd->is_dense = false;
-
-    return isolated_pcd;
+    return cloud;
 }
 
-// Function to run the point cloud processing and save the PCD file
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr isolate_colored_pointcloud(
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud,
+    unsigned char target_blue,
+    unsigned char target_green,
+    unsigned char target_red
+)
+{
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr isolated(new pcl::PointCloud<pcl::PointXYZRGB>());
+    for (auto &pt : input_cloud->points) {
+        if ( std::isfinite(pt.z) && 
+             pt.b == target_blue &&
+             pt.g == target_green &&
+             pt.r == target_red )
+        {
+            isolated->points.push_back(pt);
+        }
+    }
+    isolated->width  = static_cast<uint32_t>(isolated->points.size());
+    isolated->height = 1;
+    isolated->is_dense = false;
+    return isolated;
+}
+// Helper to decode color & depth from JSON
+void decode_frames_from_json(
+    const nlohmann::json &frame_json,
+    cv::Mat &color_image,
+    cv::Mat &depth_image
+) {
+    // Extract base64-encoded data
+    std::string encoded_color = frame_json.at("color_encoded").get<std::string>();
+    int color_width = frame_json.at("color_width").get<int>();
+    int color_height = frame_json.at("color_height").get<int>();
+
+    std::string encoded_depth = frame_json.at("depth_encoded").get<std::string>();
+    int depth_width = frame_json.at("depth_width").get<int>();
+    int depth_height = frame_json.at("depth_height").get<int>();
+
+    // Decode color
+    std::vector<uchar> color_data = base64_decode(encoded_color);
+    color_image = cv::imdecode(color_data, cv::IMREAD_COLOR);
+    if (!color_image.empty()) {
+        // Ensure it matches the reported width/height (optional check)
+        if (color_image.cols != color_width || color_image.rows != color_height) {
+            std::cerr << "[Client] Warning: Color image size mismatch.\n";
+        }
+    }
+
+    // Decode depth
+    std::vector<uchar> depth_data = base64_decode(encoded_depth);
+    // Depth was sent raw 16-bit. We could decode it from a PNG or treat it as a raw buffer.
+    // This depends on how the server sent it. 
+    // If it's raw, we can do:
+    if (depth_data.size() == (size_t)depth_width * depth_height * 2) {
+        depth_image = cv::Mat(depth_height, depth_width, CV_16UC1, depth_data.data()).clone();
+    } else {
+        std::cerr << "[Client] Depth size mismatch or decoding error.\n";
+    }
+}
+
+
+
+
+// // Suppose glfw_state is defined somewhere else in your code
+// struct glfw_state {
+//     float offset_y = 0.0f;
+//     float pitch    = 0.0f;
+//     float yaw      = 0.0f;
+
+//     // If you still have an OpenGL texture you want to bind, put it here:
+//     // texture tex; // For example, if you need it. Otherwise omit.
+// };
+
+// Handles all the OpenGL calls needed to display a PCL point cloud
+inline void display_pointcloud(
+    float width,
+    float height,
+    glfw_state& app_state,
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud
+)
+{
+    // Safety check
+    if (!cloud || cloud->empty())
+        return;
+
+    // OpenGL: prep screen for point cloud
+    glLoadIdentity();
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    // Background color
+    glClearColor(153.f / 255, 153.f / 255, 153.f / 255, 1.0f);
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    // Set up perspective
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    gluPerspective(60.0, width / height, 0.01, 10.0);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    gluLookAt(0, 0, 0,  // Eye/camera position
+              0, 0, 1,  // Look at point
+              0, -1, 0); // Up vector
+
+    // Basic transformations for user interaction
+    glTranslatef(0, 0, +0.5f + app_state.offset_y * 0.05f);
+    glRotated(app_state.pitch, 1, 0, 0);
+    glRotated(app_state.yaw,   0, 1, 0);
+    glTranslatef(0, 0, -0.5f);
+
+    // Set point size
+    glPointSize(width / 640.0f);
+
+    glEnable(GL_DEPTH_TEST);
+
+    // If you don’t need texturing, disable it:
+    glDisable(GL_TEXTURE_2D);
+
+    // Begin drawing
+    glBegin(GL_POINTS);
+
+    // Loop over PCL points
+    for (const auto& pt : cloud->points)
+    {
+        // Check for valid/finite point
+        if (!std::isfinite(pt.x) || !std::isfinite(pt.y) || !std::isfinite(pt.z))
+            continue;
+
+        // Set color from the PCL point (pcl::PointXYZRGB stores r,g,b as uint8)
+        glColor3ub(pt.r, pt.g, pt.b);
+
+        // Position in 3D
+        glVertex3f(pt.x, pt.y, pt.z);
+    }
+
+    glEnd(); // End GL_POINTS
+
+    // Cleanup matrices
+    glPopMatrix();           // MODELVIEW
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();           // PROJECTION
+    glPopAttrib();           // ATTRIB_BITS
+}
+
 
 void run_pointcloud_processing(const std::string& pcd_file_path) {
+    // We'll store the final isolated cloud here:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr isolated_pcd;
 
-    // Create a simple OpenGL window for rendering:
-    window app(1280, 720, "RealSense Pointcloud Example");
-    // Construct an object to manage view state
+    // Create an OpenGL window for rendering:
+    window app(1280, 720, "Pointcloud Client (No RealSense on Client)");
     glfw_state app_state;
-    // register callbacks to allow manipulation of the pointcloud
     register_glfw_callbacks(app, app_state);
 
     try {
-        // Initialize RealSense pipeline
-        rs2::pipeline pipe;
-        auto profile = pipe.start();
-
-        // Get depth stream intrinsics
-        auto depth_stream_profile = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
-        rs2_intrinsics intrinsics = depth_stream_profile.get_intrinsics();
-
-        // Define bounding box color range (example: orange in HSV)
-        cv::Scalar lower_orange(0, 0, 0);
-        cv::Scalar upper_orange(20, 20, 20);
-
-
-        // Initialize ZeroMQ context and socket
+        // --------------------------------------------------------------------
+        // 1. Initialize ZeroMQ client, create TWO sockets:
+        //    (A) rs_socket for RealSense server
+        //    (B) yolo_socket for YOLO bounding box server
+        // --------------------------------------------------------------------
         zmq::context_t context_zmq(1);
-        zmq::socket_t socket(context_zmq, zmq::socket_type::req);
-        // Connect to the Python server
-        socket.connect("tcp://localhost:5555");
 
+        zmq::socket_t rs_socket(context_zmq, zmq::socket_type::req);
+        rs_socket.connect("tcp://localhost:6000");
+        std::cout << "[Client] Connected to RS-Server on tcp://localhost:6000\n";
+
+        zmq::socket_t yolo_socket(context_zmq, zmq::socket_type::req);
+        yolo_socket.connect("tcp://localhost:5555");
+        std::cout << "[Client] Connected to YOLO-Server on tcp://localhost:5555\n";
+
+        // --------------------------------------------------------------------
+        // 2. Request intrinsics from the RealSense server
+        // --------------------------------------------------------------------
+        nlohmann::json intrinsics_json;
+        {
+            std::string intr_request = "intrinsics";
+            zmq::message_t request_msg(intr_request.size());
+            memcpy(request_msg.data(), intr_request.c_str(), intr_request.size());
+            rs_socket.send(request_msg, zmq::send_flags::none);
+
+            // Receive intrinsics JSON from RS-Server
+            zmq::message_t reply_msg;
+            auto res = rs_socket.recv(reply_msg, zmq::recv_flags::none);
+            if (!res) {
+                throw std::runtime_error("[Client] Failed to receive intrinsics from RS-Server.");
+            }
+            std::string reply_str(static_cast<char*>(reply_msg.data()), reply_msg.size());
+            intrinsics_json = nlohmann::json::parse(reply_str);
+
+            std::cout << "[Client] Received intrinsics: "
+                      << intrinsics_json["width"] << "x" << intrinsics_json["height"]
+                      << " fx=" << intrinsics_json["fx"]
+                      << " fy=" << intrinsics_json["fy"] << std::endl;
+        }
+
+        // If the server sends depth in millimeters, use 0.001f to convert to meters:
+        float depth_scale = 0.001f;
+
+        // --------------------------------------------------------------------
+        // 3. Main loop: request frames from RS-Server, process them, display
+        // --------------------------------------------------------------------
         while (app) {
-            // Capture frames from RealSense
-            rs2::frameset frames = pipe.wait_for_frames();
-            rs2::video_frame color_frame = frames.get_color_frame();
-            // For cameras that don't have RGB sensor, we'll map the pointcloud to infrared instead of color
-            if (!color_frame)
-                color_frame = frames.get_infrared_frame();
-            rs2::depth_frame depth_frame = frames.get_depth_frame();
-
-            // Convert color frame to OpenCV Mat
-            cv::Mat color_image(cv::Size(color_frame.get_width(), color_frame.get_height()), CV_8UC3,
-                                (void*)color_frame.get_data(), cv::Mat::AUTO_STEP);
-            if (color_image.empty()) {
-                throw std::runtime_error("Captured frame is empty.");
+            // 3A) Ask RealSense server for the next frame
+            {
+                std::string frame_request = "next_frame";
+                zmq::message_t request_msg(frame_request.size());
+                memcpy(request_msg.data(), frame_request.c_str(), frame_request.size());
+                rs_socket.send(request_msg, zmq::send_flags::none);
             }
 
-            // Replace the bounding box detection section with ZeroMQ IPC
-            // ------------------------------------------------------------
+            // 3B) Receive color+depth JSON from RS-Server
+            cv::Mat color_image, depth_image;
+            {
+                zmq::message_t reply_msg;
+                auto res = rs_socket.recv(reply_msg, zmq::recv_flags::none);
+                if (!res) {
+                    std::cerr << "[Client] Failed to receive frames from RS-Server.\n";
+                    continue;
+                }
+                std::string reply_str(static_cast<char*>(reply_msg.data()), reply_msg.size());
+                auto frames_json = nlohmann::json::parse(reply_str);
 
-            // Clone the image (if needed)
+                // Convert from Base64 → cv::Mat
+                decode_frames_from_json(frames_json, color_image, depth_image);
+                if (color_image.empty() || depth_image.empty()) {
+                    std::cerr << "[Client] Invalid frames received.\n";
+                    continue;
+                }
+                cv::cvtColor(color_image, color_image, cv::COLOR_BGR2RGB);
+
+            }
+
+            // 3C) Send color image to the YOLO server for bounding-box detection
             cv::Mat color_image_copy = color_image.clone();
-            // Uncomment if conversion is necessary
-            // cv::cvtColor(color_image_copy, color_image_copy, cv::COLOR_RGB2BGR);
+            {
+                // Encode color_image_copy as JPEG
+                std::vector<uchar> buf;
+                std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 90};
+                if (!cv::imencode(".jpg", color_image_copy, buf, params)) {
+                    std::cerr << "[Client] Failed to encode image for YOLO.\n";
+                    continue;
+                }
+                // Base64-encode
+                std::string encoded_image = base64_encode(buf);
 
-            // Encode the image as JPEG
-            std::vector<uchar> buf;
-            std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 90};
-            if (!cv::imencode(".jpg", color_image_copy, buf, params)) {
-                std::cerr << "Failed to encode image as JPEG." << std::endl;
-                continue;
+                // Build JSON with "image_data"
+                nlohmann::json request_json;
+                request_json["image_data"] = encoded_image;
+                std::string request_str = request_json.dump();
+
+                // Send to YOLO server
+                zmq::message_t request_msg(request_str.size());
+                memcpy(request_msg.data(), request_str.c_str(), request_str.size());
+                yolo_socket.send(request_msg, zmq::send_flags::none);
             }
 
-            // Convert to Base64
-            std::string encoded_image = base64_encode(buf);
-
-            // Create JSON request
-            json request_json;
-            request_json["image_data"] = encoded_image;
-            std::string request_str = request_json.dump();
-
-            // Send the request
-            zmq::message_t request(request_str.size());
-            memcpy(request.data(), request_str.c_str(), request_str.size());
-            socket.send(request, zmq::send_flags::none);
-
-            // Receive the reply from the Python server
-            zmq::message_t reply;
-            auto result = socket.recv(reply, zmq::recv_flags::none);
-
-            // Handle the receive result
-            if (!result) {
-                std::cerr << "Failed to receive reply from the Python server." << std::endl;
-                continue; // Skip processing this frame or handle as needed
+            // 3D) Receive bounding box from YOLO
+            nlohmann::json reply_json;
+            {
+                zmq::message_t reply_msg;
+                auto res = yolo_socket.recv(reply_msg, zmq::recv_flags::none);
+                if (!res) {
+                    std::cerr << "[Client] Failed to receive reply from YOLO server.\n";
+                    continue;
+                }
+                std::string py_reply_str(static_cast<char*>(reply_msg.data()), reply_msg.size());
+                reply_json = nlohmann::json::parse(py_reply_str);
             }
 
-            // Deserialize the reply
-            std::string reply_str(static_cast<char*>(reply.data()), reply.size());
-            json reply_json = json::parse(reply_str);
-
-            // Extract bounding box
+            // 3E) Draw bounding box on color_image_copy
             if (reply_json.contains("bbox")) {
-                json bbox_json = reply_json["bbox"];
+                auto bbox_json = reply_json["bbox"];
                 int x_min = bbox_json["x_min"];
                 int y_min = bbox_json["y_min"];
                 int x_max = bbox_json["x_max"];
                 int y_max = bbox_json["y_max"];
 
-                // Draw bounding box on the image for visualization
+                // Clamp coords to image boundaries
+                x_min = std::max(0, std::min(x_min, color_image_copy.cols - 1));
+                x_max = std::max(0, std::min(x_max, color_image_copy.cols - 1));
+                y_min = std::max(0, std::min(y_min, color_image_copy.rows - 1));
+                y_max = std::max(0, std::min(y_max, color_image_copy.rows - 1));
+
+                // Draw bounding box
                 cv::rectangle(color_image_copy,
-                            cv::Point(x_min, y_min),
-                            cv::Point(x_max, y_max),
-                            cv::Scalar(0, 255, 0), 2);
+                              cv::Point(x_min, y_min),
+                              cv::Point(x_max, y_max),
+                              cv::Scalar(0, 255, 0), 2);
 
-                // Get color frame dimensions and data pointer
-                int width = color_frame.get_width();
-                int height = color_frame.get_height();
-                int stride = color_frame.get_stride_in_bytes();
-                unsigned char* data = (unsigned char*)color_frame.get_data();
-
-                // Ensure the coordinates are within the frame bounds
-                x_min = std::max(0, x_min);
-                y_min = std::max(0, y_min);
-                x_max = std::min(width - 1, x_max);
-                y_max = std::min(height - 1, y_max);
-
-                // Modify pixel values in the bounding box to blue
-                for (int y = y_min; y <= y_max; ++y) {
-                    for (int x = x_min; x <= x_max; ++x) {
-                        int index = y * stride + x * 3; // Assuming 3 bytes per pixel (BGR)
-                        data[index] = 255;   // Blue channel
-                        data[index + 1] = 0; // Green channel
-                        data[index + 2] = 0; // Red channel
+                // (Optional) fill bounding box with blue
+                for (int row = y_min; row <= y_max; ++row) {
+                    for (int col = x_min; col <= x_max; ++col) {
+                        color_image_copy.at<cv::Vec3b>(row, col) = cv::Vec3b(255, 0, 0);
                     }
                 }
-            } else if (reply_json.contains("error")) {
-                std::cerr << "Error from Python server: " << reply_json["error"] << std::endl;
-            } else {
-                std::cerr << "Bounding box not found in the reply." << std::endl;
+            }
+            else if (reply_json.contains("error")) {
+                std::cerr << "[Client] Error from YOLO server: "
+                          << reply_json["error"] << std::endl;
+            }
+            else {
+                std::cerr << "[Client] BBox not found in YOLO reply.\n";
             }
 
-            // ------------------------------------------------------------
+            // 3F) Create a 3D cloud from color+depth using intrinsics
+            auto full_cloud = createPointCloudFromDepth(
+                depth_image, 
+                color_image, 
+                intrinsics_json,
+                depth_scale 
+            );
 
-            // Generate point cloud from depth frame
-            rs2::pointcloud pc;
-            rs2::points points;
-            pc.map_to(color_frame);
-            points = pc.calculate(depth_frame);
+            // (Optional) Filter points that turned "blue" (B=255,G=0,R=0).
+            // You can skip or adapt to your logic.
+            unsigned char target_blue  = 255;
+            unsigned char target_green = 0;
+            unsigned char target_red   = 0;
+            isolated_pcd = isolate_colored_pointcloud(
+                full_cloud,
+                target_blue,
+                target_green,
+                target_red
+            );
 
-            // Render point clouds
-            app_state.tex.upload(color_frame);
+            // Show bounding box in a 2D window (OpenCV)
+            cv::imshow("Color w/ BBox", color_image_copy);
 
-            unsigned char target_blue = 255; // Blue channel
-            unsigned char target_green = 0;  // Green channel
-            unsigned char target_red = 0;    // Red channel
+            // Display the 3D cloud in OpenGL
+            display_pointcloud(app.width(), app.height(), app_state, full_cloud);
 
-            isolated_pcd = isolate_colored_pointcloud(800, 600, points, color_frame, target_blue, target_green, target_red);
-            // Optionally, implement and call a function like draw_colored_pointcloud if needed
-            draw_pointcloud(app.width(), app.height(), app_state, points);
-
-            // Exit loop if 'q' is pressed
+            // Press 'q' in the OpenCV window to exit
             if (cv::waitKey(1) == 'q') {
                 break;
             }
         }
 
-        // Save the isolated point cloud to a PCD file
+        // --------------------------------------------------------------------
+        // 4. Save the final isolated cloud to PCD
+        // --------------------------------------------------------------------
         if (isolated_pcd && !isolated_pcd->points.empty()) {
             pcl::io::savePCDFileASCII(pcd_file_path, *isolated_pcd);
-            std::cout << "Saved " << isolated_pcd->points.size() << " points to " << pcd_file_path << std::endl;
+            std::cout << "Saved " << isolated_pcd->points.size()
+                      << " points to " << pcd_file_path << std::endl;
         } else {
             std::cerr << "Isolated point cloud is empty. Nothing to save." << std::endl;
         }
 
-        // Cleanup GLFW
-        // glfwDestroyWindow(window);
-        // glfwTerminate();
-    }catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::cerr << "Error in run_pointcloud_processing: " << e.what() << std::endl;
     }
 }

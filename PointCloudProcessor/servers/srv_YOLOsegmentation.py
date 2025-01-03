@@ -4,10 +4,19 @@ import base64
 import numpy as np
 import cv2
 from ultralytics import YOLO
+import os
 
-
-# Load the YOLO model
-model = YOLO("../assets/best.pt")  # Update the path to your YOLO model file
+# Check the current working directory
+current_dir = os.getcwd()
+# Verify if the file exists
+model_path = os.path.join(current_dir, "../assets/best.pt")
+# Load YOLO model
+if os.path.exists(model_path):
+    print(f"Model file found at: {model_path}")
+    # Load the YOLO model
+    model = YOLO(model_path)
+else:
+    print(f"Model file not found in the path: {model_path}")
 
 
 def get_bounding_boxes(image):

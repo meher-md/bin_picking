@@ -78,3 +78,4 @@ third_party/
 tags
 *.pyc
 *.class
+tests/segmentation/yolov5
