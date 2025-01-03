@@ -1,0 +1,34 @@
+Below I have given description of my package higher level functional flow.  ALso given idea on how far I have implemented and how the current flow is. I want you to suggest a proper flow which will be modular and scalable. 
+
+Project Goal: To make robotic arm grab a known object out of a pile of objects. we have the CAD file of the known object. 
+Existing flow :
+1. A server named rs_server.py running on raspberry pi sending RGB image, Depth image and intrinsics over ZeroMQ socket
+            // Create JSON to send
+            nlohmann::json reply_json;
+            reply_json["color_width"]   = color_frame.get_width();
+            reply_json["color_height"]  = color_frame.get_height();
+            reply_json["color_encoded"] = encoded_color;
+
+            reply_json["depth_width"]   = depth_width;
+            reply_json["depth_height"]  = depth_height;
+            reply_json["depth_encoded"] = encoded_depth;
+
+2. A server named srv_YOLOsegmentation.py running yolo trained network to do segmentaion of object out of color image and send the bounding box of the segment
+        # Extract image data
+        encoded_image = request_json.get("image_data", "")
+        if not encoded_image:
+            return {"error": "No image data received."}
+
+3. function named cad_pcd which takes .obj file and converts to pcd and save to disk in the name of generated_pcd.pcd
+4. function named run_pointcloud_processing(object_pcd_file_path), which sends request to  rs_server get realsense data, requests for YOLO segmentation and get object bounding box, calls other functions to isolate the pcd of the object from the scene and save that pcd to disk in the name of obejct_pcd.pcd
+5. main function that calls cad_pcd and saves generated_pcd.pcd to disk then call run_pointcloud_processing() which saves object_pcd.pcd to disk and then call ProcessAndVisualizePointClouds() function. 
+6. ProcessAndVisualizePointClouds() function will read both generated_pcd and object_pcd from disk, perform scaling filtering and then registration using o3d to find the transformation matrix to allign generated_pcd to object_pcd and prints that transformation. 
+
+Now what left to do
+7. Estimate best grasping points on the object using CAD diagram or its point cloud.
+8. Transform those grasping points on to the object pcd in the scene using transformation obtained in step 6.
+9. transform the grasping points from camera frame of reference to robot base frame by taking camera mounting offsets into account. 
+10. I dentify the robot way point and grasping path to reach grasping points using scene piontcloud
+11. Give way points to robot and grasp the object. 
+
+now 

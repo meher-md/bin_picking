@@ -156,10 +156,6 @@ void ProcessAndVisualizePointClouds() {
     // Preprocess the object point cloud
     visible_pcd = RemoveStatisticalOutliers(visible_pcd);
     
-
-    
-
-
     // Load the reference point cloud file
     std::string reference_pcd_path = data_folder + "/generated_pcd.pcd";
     if (!fs::exists(reference_pcd_path)) {
@@ -225,7 +221,7 @@ void ProcessAndVisualizePointClouds() {
 int main(int argc, char* argv[]) {
     try {
 
-        // // CALL FOR PCD SAVING
+
         // Generate CAD point cloud for reference
         std::string cad_file_path = "../assets/VB_1400.obj"; // Path to the CAD file
         std::shared_ptr<open3d::geometry::PointCloud> reference_pcd;
@@ -255,6 +251,7 @@ int main(int argc, char* argv[]) {
 
         // Now call the ProcessAndVisualizePointClouds function
         ProcessAndVisualizePointClouds();
+        
     } catch (const std::exception& e) {
         std::cerr << "An exception occurred: " << e.what() << "\n";
         return EXIT_FAILURE;
