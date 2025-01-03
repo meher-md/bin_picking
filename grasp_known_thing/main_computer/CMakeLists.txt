@@ -1,7 +1,7 @@
 # CMakeLists.txt
 
 cmake_minimum_required(VERSION 3.10)
-project(PointCloudProcessor)
+project(Grasp_known_thing)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -142,19 +142,22 @@ link_directories(
 )
 
 # Add executables
-add_executable(PointCloudProcessor 
+# Here we add references to the new .cpp files (SensorReceiver, SceneProcessing, Registration, PclUtils)
+add_executable(Grasp_known_thing 
     src/main.cpp 
     src/helper_functions.cpp 
-    src/pcd_saving.cpp 
-    src/detect_color_bbox.cpp
     src/pcd_processing.cpp
-    #src/pcl_to_open3d.cpp # Ensure this file exists and is needed
+    src/SensorReceiver.cpp
+    src/SceneProcessing.cpp
+    src/Registration.cpp
+    src/PclUtils.cpp
+    # src/pcd_saving.cpp    # Keep commented if not used
+    # src/detect_color_bbox.cpp
+    # src/pcl_to_open3d.cpp # Keep commented if not used
 )
 
-add_executable(TestBoundingBoxClient tests/test_bounding_box.cpp)
-
-# Link libraries for PointCloudProcessor
-target_link_libraries(PointCloudProcessor 
+# Link libraries for Grasp_known_thing
+target_link_libraries(Grasp_known_thing 
     PRIVATE 
     Open3D::Open3D
     OpenGL::GL
@@ -169,13 +172,14 @@ target_link_libraries(PointCloudProcessor
     Threads::Threads
 )
 
-# Link libraries for TestBoundingBoxClient
-target_link_libraries(TestBoundingBoxClient 
-    PRIVATE 
-    zmq    
-    nlohmann_json::nlohmann_json
-    ${OpenCV_LIBS}
-)
+# Optional test executable (commented out in your original)
+# add_executable(TestBoundingBoxClient tests/test_bounding_box.cpp)
+# target_link_libraries(TestBoundingBoxClient 
+#     PRIVATE 
+#     zmq    
+#     nlohmann_json::nlohmann_json
+#     ${OpenCV_LIBS}
+# )
 
 # Add definitions if necessary
 add_definitions(${PCL_DEFINITIONS})

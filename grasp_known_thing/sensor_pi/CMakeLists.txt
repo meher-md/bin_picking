@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project name
-project(rs_server)
+project(SensorAcquisitionPi)
 
 # Specify C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -78,10 +78,10 @@ link_directories(
 )
 
 # Add the server executable
-add_executable(rs_server rs_server.cpp)
+add_executable(SensorAcquisitionPi SensorAcquisitionPi.cpp)
 
 # Link libraries
-target_link_libraries(rs_server
+target_link_libraries(SensorAcquisitionPi
     PRIVATE
     zmq
     nlohmann_json::nlohmann_json
@@ -91,7 +91,7 @@ target_link_libraries(rs_server
 
 
 # Include directories for headers
-target_include_directories(rs_server 
+target_include_directories(SensorAcquisitionPi 
     PRIVATE 
     ${OpenCV_INCLUDE_DIRS}
     ${realsense2_INCLUDE_DIRS}

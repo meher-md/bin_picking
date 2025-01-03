@@ -16,7 +16,7 @@
 
 // Include custom headers
 #include "example.hpp"             // Should define the Texture class
-#include "detect_color_bbox.hpp"   // Should declare detect_color_bbox function
+// #include "detect_color_bbox.hpp"   // Should declare detect_color_bbox function
 
 // // Structure to hold GLFW and application state
 // struct glfw_state {

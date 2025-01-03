@@ -2,7 +2,7 @@ Below I have given description of my package higher level functional flow.  ALso
 
 Project Goal: To make robotic arm grab a known object out of a pile of objects. we have the CAD file of the known object. 
 Existing flow :
-1. A server named rs_server.py running on raspberry pi sending RGB image, Depth image and intrinsics over ZeroMQ socket
+1. A server named SensorAcquisitionPi.py running on raspberry pi sending RGB image, Depth image and intrinsics over ZeroMQ socket
             // Create JSON to send
             nlohmann::json reply_json;
             reply_json["color_width"]   = color_frame.get_width();
@@ -20,7 +20,7 @@ Existing flow :
             return {"error": "No image data received."}
 
 3. function named cad_pcd which takes .obj file and converts to pcd and save to disk in the name of generated_pcd.pcd
-4. function named run_pointcloud_processing(object_pcd_file_path), which sends request to  rs_server get realsense data, requests for YOLO segmentation and get object bounding box, calls other functions to isolate the pcd of the object from the scene and save that pcd to disk in the name of obejct_pcd.pcd
+4. function named run_pointcloud_processing(object_pcd_file_path), which sends request to  SensorAcquisitionPi get realsense data, requests for YOLO segmentation and get object bounding box, calls other functions to isolate the pcd of the object from the scene and save that pcd to disk in the name of obejct_pcd.pcd
 5. main function that calls cad_pcd and saves generated_pcd.pcd to disk then call run_pointcloud_processing() which saves object_pcd.pcd to disk and then call ProcessAndVisualizePointClouds() function. 
 6. ProcessAndVisualizePointClouds() function will read both generated_pcd and object_pcd from disk, perform scaling filtering and then registration using o3d to find the transformation matrix to allign generated_pcd to object_pcd and prints that transformation. 
 

@@ -7,7 +7,9 @@ from ultralytics import YOLO
 import os
 
 # Check the current working directory
-current_dir = os.getcwd()
+# Get the directory of the current file
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
 # Verify if the file exists
 model_path = os.path.join(current_dir, "../assets/best.pt")
 # Load YOLO model
